@@ -1,0 +1,16 @@
+Non Commercial License Notice:
+Copyright (c) 2026 Sanofi, Commissariat à l’énergie atomique (CEA), SOLEIL
+ 
+1.   Permission is hereby granted, free of charge, for academic research purposes only and for non-commercial uses only, to any person from academic research or non-profit organizations obtaining a copy of this software and associated documentation files (the "Software") to exercise the following rights :
+·        to use, copy, modify, or merge the Software with other software ;
+·        to reproduce the Software, permanently or temporarily, in whole or in part, by any means and in any form ;
+·        to load, display, execute, transmit or store the Software on any medium ;
+·        to make contributions, which includes the right to translate, adapt, arrange or make any other modifications to the Software, as well as the right to reproduce the resulting software.
+2.   These rights are granted subject to the following conditions: this permission notice shall be included in all copies of the Software or of substantial portions of the Software, whether they are modified or not.
+3.   The rights granted under this license are strictly limited to purely academic and non-commercial activities conducted independently of any private or commercial entity. Any use of the Software, in whole or in part, in the context of a collaboration, partnership, service agreement, or any other arrangement involving a private or commercial entity requires prior written authorization from all copyrights holders.
+4.   The copyright holders hold the economic rights to the Software. Any use of the Software is subject to compliance with the conditions under which the copyright holders have chosen to distribute their work, and no other party is entitled to modify the conditions governing the distribution of the Software.
+5.   For purposes of this license, “non-commercial use” excludes uses foreseeably resulting in a commercial benefit or monetary gain. To use this Software for other purposes (such as the development of a commercial product, including but not limited to software, service, or pharmaceuticals), please contact SANOFI at patent.gos@sanofi.com.
+6.   To start a research collaboration or a partnership collaboration on this Software with CEA and/or SOLEIL and/or Sanofi, please contact CEA at iramis-valo@cea.fr and/or SOLEIL at partenariats@synchrotron-soleil.fr and/or SANOFI at patent.gos@sanofi.com.
+7.   All other rights are reserved, including those for text and data mining, AI training and similar technologies.
+8.   The Software is provided “as is”, without warranty of any kind, express or implied, including the warranties of noninfringement. In particular, it is not warranted that the Software is error-free, that it will operate without interruption, that it will be compatible with other equipment and software configuration, or that it will meet the user’s needs. No warranty is given as to the existence of prior rights to the name of the Software or the existence of a trademark.
+ 
