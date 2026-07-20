@@ -10,10 +10,10 @@ from scipy.stats import chi2, probplot
 # -------------------- CONFIG --------------------
 class CFG:
     INPUT_XLSX = "spectra_deconv.xlsx"
-    SHEET_NAME = "1"
+    SHEET_NAME = "Feuil1"
     X_AXIS_COL = "WL"
-    TARGET_COL = ""
-    EXCLUDE_COLS = {"WL"}
+    TARGET_COL = None
+    EXCLUDE_COLS = "WL"
     REF_FILTER = None
     USE_REGEX = False
     CASE_SENSITIVE = False
@@ -21,10 +21,10 @@ class CFG:
     # Bootstrap (optionnal)
     BOOTSTRAP = True
     N_BOOT = 20
-    BLOCK_SIZE = 94
+    BLOCK_SIZE = 64
     RANDOM_STATE = 1234
 
-    CRITERION = "BIC_RENFORCED"  # "AIC", "BIC" or "BIC_RENFORCED"
+    CRITERION = "BIC_RENFORCE"  # "AIC", "BIC" or "BIC_RENFORCE"
     BIC_PENALIZATION = 2.0
 
     AUTO_NL = False             # auto non-linearity test (AIC/BIC)
@@ -45,7 +45,7 @@ def criterion_value(rss, n, p, method="BIC_", facteur_penalisation=2.0):
     m = method.upper()
     if m == "AIC": return aic(rss, n, p)
     if m == "BIC": return bic(rss, n, p)
-    if m == "BIC_RENFORCED": return bic_renforce(rss, n, p, facteur_penalisation)
+    if m == "BIC_RENFORCE": return bic_renforce(rss, n, p, facteur_penalisation)
     raise ValueError("Critère inconnu : " + method)
 
 
@@ -56,7 +56,7 @@ def _fit_nnls_once(y, X):
     resid = y - yhat
     return b, yhat, resid
 
-def fit_nnls(y, X_cols, *, bootstrap=True, n_boot=20, block_size=94, random_state=None):
+def fit_nnls(y, X_cols, *, bootstrap=True, n_boot=20, block_size=64, random_state=None):
     """
     Retourne:
       - beta_hat / yhat_hat / resid_hat : fit sur données originales
@@ -305,13 +305,13 @@ def plot_fit(df, xcol, y, yhat_lin, yhat_nl, target_name,
     plt.plot(x, y, color="black", lw=1.8, label="Observed spectrum")
 
     if yhat_lin is not None:
-        label_lin = "Linear reconstructed spectrum (mean)"
+        label_lin = "Linear reconstructed spectrum"
         if nRMSD_lin is not None:
             label_lin += f"\nnRMSD = {nRMSD_lin:.5g}"
         plt.plot(x, yhat_lin, "--", color="crimson", lw=1.8, label=label_lin)
 
     if yhat_nl is not None:
-        label_nl = "Semi-non-linear reconstructed spectrum (mean)"
+        label_nl = "Semi-non-linear reconstructed spectrum"
         if nRMSD_nl is not None:
             label_nl += f"\nnRMSD = {nRMSD_nl:.5g}"
         plt.plot(x, yhat_nl, "--", color="royalblue", lw=1.8, label=label_nl)
@@ -330,11 +330,14 @@ def plot_fit(df, xcol, y, yhat_lin, yhat_nl, target_name,
 
 def plot_fit_with_bands(df, xcol, y, target_name,
                         yhat_lin=None, band_lin=None, nRMSD_lin=None,
-                        yhat_nl=None,  band_nl=None,  nRMSD_nl=None,
+                        yhat_nl=None, band_nl=None, nRMSD_nl=None,
                         out_path=None):
     x = df[xcol].to_numpy(dtype=float)
 
     plt.figure(figsize=(10, 6))
+    
+    plt.axhline(0, color="black", lw=2, alpha=0.5, zorder=0)
+
     plt.plot(x, y, color="black", lw=1.8, label="Observed spectrum")
 
     if yhat_lin is not None:
@@ -358,7 +361,7 @@ def plot_fit_with_bands(df, xcol, y, target_name,
                              label=f"Semi-NL {CFG.BANDS_CONF_INT:.0f}% band")
 
     plt.xlabel("Wavelength (nm)")
-    plt.ylabel("CD signal (Δε)")
+    plt.ylabel("CD Signal (Δε)")
     plt.title(str(target_name))
     plt.grid(alpha=0.3)
     plt.legend(fontsize=14, frameon=True)
@@ -369,17 +372,43 @@ def plot_fit_with_bands(df, xcol, y, target_name,
     plt.close()
 
 
+
 # -------------------- main --------------------
-def main(INPUT_XLSX=None, TARGET_COL=None, EXCLUDE_COLS=None, REF_FILTER=None):
+def main(
+    INPUT_XLSX=None,
+    TARGET_COL=None,
+    EXCLUDE_COLS=None,
+    REF_FILTER=None,
+    can_do_Z_form=True,
+    can_do_A_form=True,
+    can_do_quad=True,
+    can_do_i_motif=True):
     if INPUT_XLSX:  CFG.INPUT_XLSX = INPUT_XLSX
     if TARGET_COL:  CFG.TARGET_COL = TARGET_COL
-    if EXCLUDE_COLS: CFG.EXCLUDE_COLS = set(EXCLUDE_COLS)
     if REF_FILTER is not None: CFG.REF_FILTER = REF_FILTER
 
     CFG.OUTPUT_DIR = CFG.TARGET_COL
     os.makedirs(CFG.OUTPUT_DIR, exist_ok=True)
 
     df = pd.read_excel(CFG.INPUT_XLSX, sheet_name=CFG.SHEET_NAME, engine="openpyxl")
+
+    exclude_cols = set(EXCLUDE_COLS) if EXCLUDE_COLS else set(CFG.EXCLUDE_COLS)
+
+    if not can_do_Z_form:
+        exclude_cols.update(["Z-DNA", "Z-RNA"])
+
+    if not can_do_A_form:
+        exclude_cols.add("A-DNA")
+
+    if not can_do_quad:
+        for i in [c for c in df.columns if "quadruplex" in str(c).lower()]:
+            exclude_cols.add(i)
+
+    if not can_do_i_motif:
+        exclude_cols.add("DNA i-motif")
+
+    CFG.EXCLUDE_COLS = exclude_cols
+    
     if CFG.X_AXIS_COL not in df.columns or CFG.TARGET_COL not in df.columns:
         raise ValueError("X_AXIS_COL ou TARGET_COL introuvable dans les colonnes.")
     y = df[CFG.TARGET_COL].to_numpy(dtype=float)
@@ -659,7 +688,7 @@ def main(INPUT_XLSX=None, TARGET_COL=None, EXCLUDE_COLS=None, REF_FILTER=None):
     )
     print(f"[Plot] Graph with band saved → {out_png3}")
 
-    fig4_name = f"{CFG.TARGET_COL}_deconv_fit_beta_sum_with_bounds_ln.png"
+    fig4_name = f"{CFG.TARGET_COL}_deconv_fit_beta_sum_with_bounds_nl.png"
     out_png4 = os.path.join(CFG.OUTPUT_DIR, fig4_name)
 
     band_lin = (yhat_lin_low, yhat_lin_high) if (yhat_lin_low is not None and yhat_lin_high is not None) else None
@@ -692,5 +721,4 @@ def main(INPUT_XLSX=None, TARGET_COL=None, EXCLUDE_COLS=None, REF_FILTER=None):
             print(f"  {comp}: {v:.2f}%")
 
     print(f"\nBootstrap activated ? {CFG.BOOTSTRAP} (N_BOOT={CFG.N_BOOT}, BLOCK_SIZE={CFG.BLOCK_SIZE})")
-
     print("\n=== Deconvolution finished ===")
