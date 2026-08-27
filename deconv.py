@@ -158,6 +158,18 @@ def compute_contributions_sum_beta_with_disordered(
     ref_filter=None,
     case_sensitive=False,
 ):
+    """
+    Calcule les contributions par conformation.
+
+    Règles :
+      - terme linéaire X_i       -> 100 % attribué à i
+      - terme quadratique X_i^2  -> 100 % attribué à i
+      - interaction X_i*X_j      -> 50 % attribué à i
+                                  + 50 % attribué à j
+
+    Les contributions sont ensuite normalisées pour sommer à 100 %.
+    """
+
     beta_mat = np.atleast_2d(beta_mat)
     n_boot, p = beta_mat.shape
 
@@ -166,48 +178,153 @@ def compute_contributions_sum_beta_with_disordered(
             return s.startswith(prefix)
         return s.lower().startswith(prefix.lower())
 
+    # Déterminer éventuellement DNA / RNA
     tag = ""
     if ref_filter:
         rf = ref_filter if case_sensitive else ref_filter.lower()
+
         if rf == "dna":
             tag = "DNA"
         elif rf == "rna":
             tag = "RNA"
         else:
-            names_join = " ".join(feat_names if case_sensitive else [n.lower() for n in feat_names])
+            names_join = " ".join(
+                feat_names if case_sensitive
+                else [n.lower() for n in feat_names]
+            )
+
             if ("dna" in names_join) and ("rna" not in names_join):
                 tag = "DNA"
             elif ("rna" in names_join) and ("dna" not in names_join):
                 tag = "RNA"
 
-    disordered_name = f"{disordered_prefix}{tag}" if tag else disordered_prefix
-    bases = [n.split("^")[0].split("*")[0] for n in feat_names]
+    disordered_name = (
+        f"{disordered_prefix}{tag}"
+        if tag else disordered_prefix
+    )
 
+    def normalize_base_name(name):
+        """
+        Regroupe rand* sous Disordered_DNA / Disordered_RNA.
+        """
+        if _starts_with(name, rand_prefix):
+            return disordered_name
+        return name
+
+    # ---------------------------------------------------------
+    # Identifier toutes les conformations originales
+    # ---------------------------------------------------------
     uniq = []
-    for b in bases:
-        b2 = disordered_name if _starts_with(b, rand_prefix) else b
-        if b2 not in uniq:
-            uniq.append(b2)
+
+    for feat in feat_names:
+
+        # Interaction X_i*X_j
+        if "*" in feat:
+            left, right = feat.split("*", 1)
+
+            left = normalize_base_name(left)
+            right = normalize_base_name(right)
+
+            if left not in uniq:
+                uniq.append(left)
+            if right not in uniq:
+                uniq.append(right)
+
+        # Quadratique X_i^2
+        elif "^" in feat:
+            base = feat.split("^", 1)[0]
+            base = normalize_base_name(base)
+
+            if base not in uniq:
+                uniq.append(base)
+
+        # Linéaire X_i
+        else:
+            base = normalize_base_name(feat)
+
+            if base not in uniq:
+                uniq.append(base)
 
     if n_boot == 0 or p == 0:
-        return ({u: 0.0 for u in uniq}, {u: 0.0 for u in uniq})
+        return (
+            {u: 0.0 for u in uniq},
+            {u: 0.0 for u in uniq},
+        )
 
     contrib_boot = np.zeros((n_boot, len(uniq)), float)
 
-    for i in range(n_boot):
+    # ---------------------------------------------------------
+    # Attribution des coefficients
+    # ---------------------------------------------------------
+    for b in range(n_boot):
+
         sums = {u: 0.0 for u in uniq}
-        for j, b in enumerate(bases):
-            cat = disordered_name if _starts_with(b, rand_prefix) else b
-            sums[cat] += float(beta_mat[i, j])
+
+        for j, feat in enumerate(feat_names):
+
+            beta = float(beta_mat[b, j])
+
+            # -----------------------------------------
+            # Interaction X_i * X_j
+            # -> moitié à chaque conformation
+            # -----------------------------------------
+            if "*" in feat:
+
+                left, right = feat.split("*", 1)
+
+                left = normalize_base_name(left)
+                right = normalize_base_name(right)
+
+                # Cas particulier :
+                # si les deux sont finalement regroupés dans
+                # la même catégorie, ne pas couper en deux.
+                if left == right:
+                    sums[left] += beta
+                else:
+                    sums[left] += 0.5 * beta
+                    sums[right] += 0.5 * beta
+
+            # -----------------------------------------
+            # Quadratique X_i^2
+            # -> entièrement attribué à X_i
+            # -----------------------------------------
+            elif "^" in feat:
+
+                base = feat.split("^", 1)[0]
+                base = normalize_base_name(base)
+
+                sums[base] += beta
+
+            # -----------------------------------------
+            # Linéaire X_i
+            # -> entièrement attribué à X_i
+            # -----------------------------------------
+            else:
+
+                base = normalize_base_name(feat)
+                sums[base] += beta
+
+        # -----------------------------------------------------
+        # Normalisation en %
+        # -----------------------------------------------------
         tot = sum(sums.values())
+
         if tot > 0:
             for k, u in enumerate(uniq):
-                contrib_boot[i, k] = 100.0 * sums[u] / tot
+                contrib_boot[b, k] = 100.0 * sums[u] / tot
 
     mean = contrib_boot.mean(axis=0)
-    std = contrib_boot.std(axis=0, ddof=1) if n_boot > 1 else np.zeros(contrib_boot.shape[1])
-    return {uniq[k]: float(mean[k]) for k in range(len(uniq))}, {uniq[k]: float(std[k]) for k in range(len(uniq))}
 
+    std = (
+        contrib_boot.std(axis=0, ddof=1)
+        if n_boot > 1
+        else np.zeros(contrib_boot.shape[1])
+    )
+
+    return (
+        {uniq[k]: float(mean[k]) for k in range(len(uniq))},
+        {uniq[k]: float(std[k]) for k in range(len(uniq))},
+    )
 
 # -------------------- non bootstrap contributions --------------------
 def contributions_hat_percent_with_disordered(
