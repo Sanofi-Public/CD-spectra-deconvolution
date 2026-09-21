@@ -158,17 +158,6 @@ def compute_contributions_sum_beta_with_disordered(
     ref_filter=None,
     case_sensitive=False,
 ):
-    """
-    Calcule les contributions par conformation.
-
-    Règles :
-      - terme linéaire X_i       -> 100 % attribué à i
-      - terme quadratique X_i^2  -> 100 % attribué à i
-      - interaction X_i*X_j      -> 50 % attribué à i
-                                  + 50 % attribué à j
-
-    Les contributions sont ensuite normalisées pour sommer à 100 %.
-    """
 
     beta_mat = np.atleast_2d(beta_mat)
     n_boot, p = beta_mat.shape
@@ -178,7 +167,6 @@ def compute_contributions_sum_beta_with_disordered(
             return s.startswith(prefix)
         return s.lower().startswith(prefix.lower())
 
-    # Déterminer éventuellement DNA / RNA
     tag = ""
     if ref_filter:
         rf = ref_filter if case_sensitive else ref_filter.lower()
@@ -204,21 +192,14 @@ def compute_contributions_sum_beta_with_disordered(
     )
 
     def normalize_base_name(name):
-        """
-        Regroupe rand* sous Disordered_DNA / Disordered_RNA.
-        """
         if _starts_with(name, rand_prefix):
             return disordered_name
         return name
 
-    # ---------------------------------------------------------
-    # Identifier toutes les conformations originales
-    # ---------------------------------------------------------
     uniq = []
 
     for feat in feat_names:
 
-        # Interaction X_i*X_j
         if "*" in feat:
             left, right = feat.split("*", 1)
 
@@ -230,7 +211,6 @@ def compute_contributions_sum_beta_with_disordered(
             if right not in uniq:
                 uniq.append(right)
 
-        # Quadratique X_i^2
         elif "^" in feat:
             base = feat.split("^", 1)[0]
             base = normalize_base_name(base)
@@ -238,7 +218,6 @@ def compute_contributions_sum_beta_with_disordered(
             if base not in uniq:
                 uniq.append(base)
 
-        # Linéaire X_i
         else:
             base = normalize_base_name(feat)
 
@@ -253,9 +232,6 @@ def compute_contributions_sum_beta_with_disordered(
 
     contrib_boot = np.zeros((n_boot, len(uniq)), float)
 
-    # ---------------------------------------------------------
-    # Attribution des coefficients
-    # ---------------------------------------------------------
     for b in range(n_boot):
 
         sums = {u: 0.0 for u in uniq}
@@ -264,10 +240,6 @@ def compute_contributions_sum_beta_with_disordered(
 
             beta = float(beta_mat[b, j])
 
-            # -----------------------------------------
-            # Interaction X_i * X_j
-            # -> moitié à chaque conformation
-            # -----------------------------------------
             if "*" in feat:
 
                 left, right = feat.split("*", 1)
@@ -275,19 +247,12 @@ def compute_contributions_sum_beta_with_disordered(
                 left = normalize_base_name(left)
                 right = normalize_base_name(right)
 
-                # Cas particulier :
-                # si les deux sont finalement regroupés dans
-                # la même catégorie, ne pas couper en deux.
                 if left == right:
                     sums[left] += beta
                 else:
                     sums[left] += 0.5 * beta
                     sums[right] += 0.5 * beta
 
-            # -----------------------------------------
-            # Quadratique X_i^2
-            # -> entièrement attribué à X_i
-            # -----------------------------------------
             elif "^" in feat:
 
                 base = feat.split("^", 1)[0]
@@ -295,18 +260,11 @@ def compute_contributions_sum_beta_with_disordered(
 
                 sums[base] += beta
 
-            # -----------------------------------------
-            # Linéaire X_i
-            # -> entièrement attribué à X_i
-            # -----------------------------------------
             else:
 
                 base = normalize_base_name(feat)
                 sums[base] += beta
 
-        # -----------------------------------------------------
-        # Normalisation en %
-        # -----------------------------------------------------
         tot = sum(sums.values())
 
         if tot > 0:
@@ -336,10 +294,6 @@ def contributions_hat_percent_with_disordered(
     ref_filter=None,
     case_sensitive=False,
 ):
-    """
-    Contributions en % à partir de beta_hat (fit sur données originales).
-    Regroupe rand* -> Disordered_...
-    """
     beta_hat = np.asarray(beta_hat, float).reshape(-1)
     if beta_hat.size != len(feat_names):
         raise ValueError("beta_hat et feat_names n'ont pas la même taille.")
@@ -765,7 +719,7 @@ def main(
 
     print(f"[Export] Results saved → {out_xlsx}")
 
-    # -------------------- Figures (fit MOYENNÉ, sans % en légende) --------------------
+    # -------------------- Figures --------------------
     fig1_name = f"{CFG.TARGET_COL}_deconv_fit_beta_sum.png"
     out_png1 = os.path.join(CFG.OUTPUT_DIR, fig1_name)
     plot_fit(
